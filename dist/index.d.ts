@@ -21,8 +21,8 @@ interface Message {
 
 export declare class ServiceBroker {
   constructor(url: string, logger: {error: Console["error"], debug: Console["debug"]});
-  request<T>(service: ServiceFilter, req: Partial<Message>): Promise<T>;
-  requestTo<T>(endpointId: string, service: ServiceFilter, req: Partial<Message>): Promise<T>;
+  request(service: ServiceFilter, req: Partial<Message>): Promise<Message>;
+  requestTo(endpointId: string, service: ServiceFilter, req: Partial<Message>): Promise<Message>;
   advertise(service: ServiceAdvert, handler: ServiceHandler): Promise<void>;
   unadvertise(serviceName: string): Promise<void>;
   setHandler(serviceName: string, handler: ServiceHandler): void;
