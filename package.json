@@ -1,0 +1,17 @@
+{
+  "name": "@service-broker/webclient",
+  "version": "1.0.0",
+  "description": "Browser JavaScript library for communicating with the service broker",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/service-broker/service-broker-webclient.git"
+  },
+  "author": "Hai Phan <hai.phan@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/service-broker/service-broker-webclient/issues"
+  },
+  "homepage": "https://github.com/service-broker/service-broker-webclient#readme"
+}
