@@ -19,7 +19,7 @@ interface Message {
   payload: any
 }
 
-declare class ServiceBroker {
+export declare class ServiceBroker {
   constructor(url: string, logger: {error: Console["error"], debug: Console["debug"]});
   request<T>(service: ServiceFilter, req: Partial<Message>): Promise<T>;
   requestTo<T>(endpointId: string, service: ServiceFilter, req: Partial<Message>): Promise<T>;
