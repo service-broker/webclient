@@ -1,6 +1,6 @@
 {
   "name": "@service-broker/webclient",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Browser JavaScript library for communicating with the service broker",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
