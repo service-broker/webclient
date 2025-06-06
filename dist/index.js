@@ -1,6 +1,4 @@
-exports.ServiceBroker = ServiceBroker;
-
-function ServiceBroker(url, logger) {
+export function ServiceBroker(url, logger) {
   var pending = {};
   var pendingIdGen = 0;
   var providers = {};

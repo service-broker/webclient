@@ -1,7 +1,8 @@
 {
   "name": "@service-broker/webclient",
-  "version": "1.0.2",
-  "description": "Browser JavaScript library for communicating with the service broker",
+  "version": "2.0.0",
+  "description": "Browser ESM client library for communicating with the service broker",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "repository": {
