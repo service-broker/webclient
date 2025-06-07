@@ -1,182 +1,185 @@
-export function ServiceBroker(url, logger) {
-  var pending = {};
-  var pendingIdGen = 0;
-  var providers = {};
-  var ws;
-  var connectListeners = [];
-  var pendingSend = [];
-  connect();
-
-  function connect() {
-    var conn = new WebSocket(url);
-    conn.onopen = onOpen.bind(null, conn);
-    conn.onerror = function() {
-      logger.error("Failed to connect to service broker, retrying in 15");
-      setTimeout(connect, 15000);
-    };
-  }
-
-  function onOpen(conn) {
-    ws = conn;
-    ws.onerror = logger.error;
-    ws.onclose = onClose;
-    ws.onmessage = onMessage;
-    for (var i=0; i<connectListeners.length; i++) connectListeners[i]();
-    for (var i=0; i<pendingSend.length; i++) send(pendingSend[i].header, pendingSend[i].payload);
-    pendingSend = [];
-  }
-
-  function onClose() {
-    ws = null;
-    logger.error("Lost connection to service broker, reconnecting");
-    setTimeout(connect, 0);
-  }
-
-  function onMessage(e) {
-    var msg = messageFromString(e.data);
-    logger.debug("<<", msg.header, msg.payload);
-    if (msg.header.type == "ServiceResponse") onServiceResponse(msg);
-    else if (msg.header.type == "ServiceRequest") onServiceRequest(msg);
-    else if (msg.header.type == "SbStatusResponse") onServiceResponse(msg);
-    else if (msg.header.error) onServiceResponse(msg);
-    else logger.error("Unhandled", msg.header);
-  }
-
-  function messageFromString(text) {
-    var index = text.indexOf('\n');
-    if (index == -1) return {header: JSON.parse(text)};
-    else return {header: JSON.parse(text.substr(0,index)), payload: text.substr(index+1)};
-  }
-
-  function onServiceResponse(msg) {
-    if (pending[msg.header.id]) {
-      if (msg.header.error) pending[msg.header.id].reject(new Error(msg.header.error));
-      else pending[msg.header.id].fulfill(msg);
-      delete pending[msg.header.id];
+function messageFromString(text) {
+    const index = text.indexOf('\n');
+    if (index == -1) {
+        return {
+            header: JSON.parse(text)
+        };
     }
-    else logger.error("Response received but no pending request", msg.header);
-  }
-
-  function onServiceRequest(msg) {
-    if (providers[msg.header.service.name]) {
-      Promise.resolve(providers[msg.header.service.name].handler(msg))
-        .then(function(res) {
-          if (!res) res = {};
-          if (msg.header.id) {
-            var header = {
-              to: msg.header.from,
-              id: msg.header.id,
-              type: "ServiceResponse"
-            };
-            send(Object.assign({}, res.header, header), res.payload);
-          }
-        })
-        .catch(function(err) {
-          if (msg.header.id) {
-            send({
-              to: msg.header.from,
-              id: msg.header.id,
-              type: "ServiceResponse",
-              error: err.message
+    else {
+        return {
+            header: JSON.parse(text.slice(0, index)),
+            payload: text.slice(index + 1)
+        };
+    }
+}
+export class ServiceBroker {
+    constructor(url) {
+        this.url = url;
+        this.providers = new Map();
+        this.ws = null;
+        this.connectListeners = [];
+        this.pendingSend = [];
+        this.pendingResponses = new Map();
+        this.pendingIdGen = 0;
+        this.connect();
+    }
+    connect() {
+        const conn = new WebSocket(this.url);
+        conn.onopen = () => this.onOpen(conn);
+        conn.onerror = () => {
+            console.error("Failed to connect to service broker, retrying in 15");
+            setTimeout(() => this.connect(), 15000);
+        };
+    }
+    onOpen(conn) {
+        this.ws = conn;
+        this.ws.onerror = console.error;
+        this.ws.onclose = () => this.onClose();
+        this.ws.onmessage = event => this.onMessage(event);
+        for (const listener of this.connectListeners)
+            listener();
+        for (const { header, payload } of this.pendingSend)
+            this.send(header, payload);
+        this.pendingSend = [];
+    }
+    onClose() {
+        this.ws = null;
+        console.error("Lost connection to service broker, reconnecting");
+        setTimeout(() => this.connect(), 0);
+    }
+    onMessage(e) {
+        const msg = messageFromString(e.data);
+        console.debug("<<", msg.header, msg.payload);
+        if (msg.header.type == "ServiceResponse")
+            this.onServiceResponse(msg);
+        else if (msg.header.type == "ServiceRequest")
+            this.onServiceRequest(msg);
+        else if (msg.header.type == "SbStatusResponse")
+            this.onServiceResponse(msg);
+        else if (msg.header.error)
+            this.onServiceResponse(msg);
+        else
+            console.error("Unhandled", msg.header);
+    }
+    onServiceResponse(message) {
+        const id = message.header.id;
+        const pendingResponse = this.pendingResponses.get(id);
+        if (pendingResponse) {
+            this.pendingResponses.delete(id);
+            if (message.header.error) {
+                pendingResponse.reject(new Error(message.header.error));
+            }
+            else {
+                pendingResponse.fulfill(message);
+            }
+        }
+        else {
+            console.error("Response received but no pending request", message.header);
+        }
+    }
+    onServiceRequest(msg) {
+        const service = msg.header.service;
+        const provider = this.providers.get(service.name);
+        if (provider) {
+            Promise.resolve(provider.handler(msg))
+                .then(res => {
+                if (msg.header.id) {
+                    this.send(Object.assign(Object.assign({}, res === null || res === void 0 ? void 0 : res.header), { to: msg.header.from, id: msg.header.id, type: "ServiceResponse" }), res === null || res === void 0 ? void 0 : res.payload);
+                }
             })
-          }
-          else logger.error(err.message, msg.header);
-        })
+                .catch(err => {
+                if (msg.header.id) {
+                    this.send({
+                        to: msg.header.from,
+                        id: msg.header.id,
+                        type: "ServiceResponse",
+                        error: err.message || err
+                    });
+                }
+                else {
+                    console.error(err.message, msg.header);
+                }
+            });
+        }
+        else {
+            console.error("No handler for service " + service.name);
+        }
     }
-    else logger.error("No handler for service " + msg.header.service.name);
-  }
-
-
-
-  this.request = function(service, req) {
-    return this.requestTo(null, service, req);
-  }
-
-  this.requestTo = function(endpointId, service, req) {
-    var id = ++pendingIdGen;
-    var promise = new Promise(function(fulfill, reject) {
-      pending[id] = {fulfill: fulfill, reject: reject};
-    })
-    var header = {
-      id: id,
-      type: "ServiceRequest",
-      service: service
-    };
-    if (endpointId) header.to = endpointId;
-    send(Object.assign({}, req.header, header), req.payload);
-    return promise;
-  }
-
-  function send(header, payload) {
-      if (!ws) {
-        pendingSend.push({header: header, payload: payload});
-        return;
-      }
-      logger.debug(">>", header, payload);
-      ws.send(JSON.stringify(header) + (payload ? "\n"+payload : ""));
-  }
-
-
-
-  this.advertise = function(service, handler) {
-    if (providers[service.name]) throw new Error(service.name + " provider already exists");
-    providers[service.name] = {
-      advertisedService: service,
-      handler: handler
+    send(header, payload) {
+        if (!this.ws) {
+            this.pendingSend.push({ header, payload });
+            return;
+        }
+        console.debug(">>", header, payload);
+        if (payload) {
+            this.ws.send(JSON.stringify(header) + "\n" + payload);
+        }
+        else {
+            this.ws.send(JSON.stringify(header));
+        }
     }
-    return send({
-      type: "SbAdvertiseRequest",
-      services: Object.keys(providers)
-        .map(function(x) {return providers[x].advertisedService})
-        .filter(function(x) {return x})
-    })
-  }
-
-  this.unadvertise = function(serviceName) {
-    if (!providers[serviceName]) throw new Error(serviceName + " provider not exists");
-    delete providers[serviceName];
-    return send({
-      type: "SbAdvertiseRequest",
-      services: Object.keys(providers)
-        .map(function(x) {return providers[x].advertisedService})
-        .filter(function(x) {return x})
-    })
-  }
-
-  this.setHandler = function(serviceName, handler) {
-    if (providers[serviceName]) throw new Error("Handler already exists");
-    providers[serviceName] = {
-      handler: handler
+    request(service, req) {
+        return this.requestTo(null, service, req);
     }
-  }
-
-
-
-  this.publish = function(topic, text) {
-    return send({
-      type: "ServiceRequest",
-      service: {name: "#"+topic}
-    },
-    text);
-  }
-
-  this.subscribe = function(topic, handler) {
-    return this.advertise({name: "#"+topic}, function(msg) {
-      handler(msg.payload);
-      return null;
-    })
-  }
-
-  this.unsubscribe = function(topic) {
-    return this.unadvertise("#"+topic);
-  }
-
-  this.isConnected = function() {
-    return ws != null;
-  }
-
-  this.addConnectListener = function(listener) {
-    connectListeners.push(listener);
-    if (this.isConnected()) listener();
-  }
+    requestTo(endpointId, service, req) {
+        const id = ++this.pendingIdGen;
+        const promise = new Promise((fulfill, reject) => {
+            this.pendingResponses.set(id, { fulfill, reject });
+        });
+        const header = {
+            id: id,
+            type: "ServiceRequest",
+            service
+        };
+        if (endpointId)
+            header.to = endpointId;
+        this.send(Object.assign(Object.assign({}, req.header), header), req.payload);
+        return promise;
+    }
+    advertise(service, handler) {
+        if (this.providers.has(service.name)) {
+            throw new Error(service.name + " provider already exists");
+        }
+        this.providers.set(service.name, { advertisedService: service, handler });
+        return this.send({
+            type: "SbAdvertiseRequest",
+            services: Array.from(this.providers.values())
+                .filter(x => x.advertisedService)
+                .map(x => x.advertisedService)
+        });
+    }
+    unadvertise(serviceName) {
+        if (!this.providers.delete(serviceName)) {
+            throw new Error(serviceName + " provider not exists");
+        }
+        return this.send({
+            type: "SbAdvertiseRequest",
+            services: Array.from(this.providers.values())
+                .filter(x => x.advertisedService)
+                .map(x => x.advertisedService)
+        });
+    }
+    setServiceHandler(serviceName, handler) {
+        if (this.providers.has(serviceName)) {
+            throw new Error("Handler already exists");
+        }
+        this.providers.set(serviceName, { handler });
+    }
+    publish(topic, text) {
+        return this.send({ type: "ServiceRequest", service: { name: "#" + topic } }, text);
+    }
+    subscribe(topic, handler) {
+        return this.advertise({ name: "#" + topic }, msg => handler(msg.payload));
+    }
+    unsubscribe(topic) {
+        return this.unadvertise("#" + topic);
+    }
+    isConnected() {
+        return this.ws != null;
+    }
+    addConnectListener(listener) {
+        this.connectListeners.push(listener);
+        if (this.isConnected())
+            listener();
+    }
 }

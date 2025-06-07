@@ -1,10 +1,9 @@
 {
   "name": "@service-broker/webclient",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Browser ESM client library for communicating with the service broker",
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/service-broker/service-broker-webclient.git"
@@ -14,5 +13,8 @@
   "bugs": {
     "url": "https://github.com/service-broker/service-broker-webclient/issues"
   },
-  "homepage": "https://github.com/service-broker/service-broker-webclient#readme"
+  "homepage": "https://github.com/service-broker/service-broker-webclient#readme",
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  }
 }

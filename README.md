@@ -1,5 +1,5 @@
-# @service-broker/webclient
-Browser ESM client library for communicating with a [service broker](https://github.com/service-broker/service-broker/wiki/specification).
+## @service-broker/webclient
+Browser ESM client library for communicating with a [Service Broker](https://github.com/service-broker/service-broker/wiki/specification)
 
 
 ### Install
@@ -9,17 +9,17 @@ npm install @service-broker/webclient
 
 
 ### Connect
-Connect to a service broker at the provided WebSocket URL.
+Connect to the Service Broker at the specified WebSocket URL.
 
 ```javascript
 import { ServiceBroker } from "@service-broker/webclient"
 
-const sb = new ServiceBroker("wss://sb.mydomain.com", console)
+const sb = new ServiceBroker("wss://sb.mydomain.com")
 ```
 
 
 ### Request
-Send a service request.  The broker will select a qualified provider based on service `name` and `capabilities`.  The parameter `request` contains the actual message that'll be delivered to the service provider.
+Send a service request.  The broker will select a qualified provider based on service `name` and requested `capabilities`.  The parameter `request` contains the actual message that'll be delivered to the service provider.
 
 ```typescript
 interface Message {
@@ -42,7 +42,7 @@ sb.request(
 
 
 ### Notify
-A notification is like a request except no response will be sent.
+A notification is like a request except no response will be sent back.
 
 ```typescript
 sb.notify(
@@ -81,7 +81,7 @@ sb.notifyTo(
 
 
 ### SetServiceHandler
-The `requestTo` and `notifyTo` methods can be used to send direct messages to other clients. For example, a chat service provider may publish a client's endpointId to other clients and allow them to send direct messages to each other.
+The `requestTo` and `notifyTo` methods can be used to send direct messages to an endpoint. For example, a chat service provider may publish a client's endpointId to other clients and allow them to send direct messages to one another.
 
 This method sets a handler for incoming requests and notifications.
 
@@ -103,5 +103,9 @@ sb.publish(
 sb.subscribe(
   topic: string,
   handler: (text: string) => void
+): Promise<void>
+
+sb.unsubscribe(
+  topic: string
 ): Promise<void>
 ```
