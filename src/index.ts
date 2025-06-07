@@ -1,21 +1,24 @@
 
-interface ServiceFilter {
+export interface ServiceSelector {
   name: string
   capabilities?: string[]
 }
 
 export interface ServiceHandler {
-  (request: Message): Message | void | Promise<Message | void>
+  (request: MessageWithHeader): Message | void | Promise<Message | void>
 }
 
-interface MessageWithHeader {
-  header: Record<string, unknown>
-  payload?: string
+type MessageHeader = Record<string, unknown>
+type MessagePayload = string
+
+export interface MessageWithHeader {
+  header: MessageHeader
+  payload?: MessagePayload
 }
 
-interface Message {
-  header?: Record<string, unknown>
-  payload?: string
+export interface Message {
+  header?: MessageHeader
+  payload?: MessagePayload
 }
 
 interface PendingResponse {
@@ -41,12 +44,12 @@ function messageFromString(text: string): MessageWithHeader {
 export class ServiceBroker {
 
   private readonly providers = new Map<string, {
-    advertisedService?: ServiceFilter
+    advertisedService?: ServiceSelector
     handler: ServiceHandler
   }>()
   private ws: WebSocket | null = null
   private readonly connectListeners: Function[] = []
-  private pendingSend: Message[] = []
+  private pendingSend: MessageWithHeader[] = []
   private readonly pendingResponses = new Map<number, PendingResponse>()
   private pendingIdGen = 0
 
@@ -106,7 +109,7 @@ export class ServiceBroker {
   }
 
   private onServiceRequest(msg: MessageWithHeader) {
-    const service = msg.header.service as ServiceFilter
+    const service = msg.header.service as ServiceSelector
     const provider = this.providers.get(service.name)
     if (provider) {
       Promise.resolve(provider.handler(msg))
@@ -137,7 +140,7 @@ export class ServiceBroker {
     }
   }
 
-  private send(header: Message['header'], payload?: Message['payload']) {
+  private send(header: MessageHeader, payload?: MessagePayload) {
     if (!this.ws) {
       this.pendingSend.push({ header, payload })
       return;
@@ -151,16 +154,16 @@ export class ServiceBroker {
   }
 
 
-  request(service: ServiceFilter, req: Message) {
+  request(service: ServiceSelector, req: Message) {
     return this.requestTo(null, service, req);
   }
 
-  requestTo(endpointId: string | null, service: ServiceFilter, req: Message) {
+  requestTo(endpointId: string | null, service: ServiceSelector, req: Message) {
     const id = ++this.pendingIdGen
     const promise = new Promise<Message>((fulfill, reject) => {
       this.pendingResponses.set(id, { fulfill, reject })
     })
-    const header: Message['header'] = {
+    const header: MessageHeader = {
       id: id,
       type: "ServiceRequest",
       service
@@ -170,7 +173,7 @@ export class ServiceBroker {
     return promise;
   }
 
-  advertise(service: ServiceFilter, handler: ServiceHandler) {
+  advertise(service: ServiceSelector, handler: ServiceHandler) {
     if (this.providers.has(service.name)) {
       throw new Error(service.name + " provider already exists")
     }

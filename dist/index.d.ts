@@ -1,13 +1,19 @@
-interface ServiceFilter {
+export interface ServiceSelector {
     name: string;
     capabilities?: string[];
 }
 export interface ServiceHandler {
-    (request: Message): Message | void | Promise<Message | void>;
+    (request: MessageWithHeader): Message | void | Promise<Message | void>;
 }
-interface Message {
-    header?: Record<string, unknown>;
-    payload?: string;
+type MessageHeader = Record<string, unknown>;
+type MessagePayload = string;
+export interface MessageWithHeader {
+    header: MessageHeader;
+    payload?: MessagePayload;
+}
+export interface Message {
+    header?: MessageHeader;
+    payload?: MessagePayload;
 }
 export declare class ServiceBroker {
     private readonly url;
@@ -25,9 +31,9 @@ export declare class ServiceBroker {
     private onServiceResponse;
     private onServiceRequest;
     private send;
-    request(service: ServiceFilter, req: Message): Promise<Message>;
-    requestTo(endpointId: string | null, service: ServiceFilter, req: Message): Promise<Message>;
-    advertise(service: ServiceFilter, handler: ServiceHandler): void;
+    request(service: ServiceSelector, req: Message): Promise<Message>;
+    requestTo(endpointId: string | null, service: ServiceSelector, req: Message): Promise<Message>;
+    advertise(service: ServiceSelector, handler: ServiceHandler): void;
     unadvertise(serviceName: string): void;
     setServiceHandler(serviceName: string, handler: ServiceHandler): void;
     publish(topic: string, text: string): void;
