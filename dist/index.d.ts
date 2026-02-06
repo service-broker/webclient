@@ -39,6 +39,7 @@ export declare class ServiceBroker {
     publish(topic: string, text: string): void;
     subscribe(topic: string, handler: (text: string) => void): void;
     unsubscribe(topic: string): void;
+    status(): Promise<any>;
     isConnected(): boolean;
     addConnectListener(listener: Function): void;
 }

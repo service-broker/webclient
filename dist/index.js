@@ -84,7 +84,12 @@ export class ServiceBroker {
             Promise.resolve(provider.handler(msg))
                 .then(res => {
                 if (msg.header.id) {
-                    this.send(Object.assign(Object.assign({}, res === null || res === void 0 ? void 0 : res.header), { to: msg.header.from, id: msg.header.id, type: "ServiceResponse" }), res === null || res === void 0 ? void 0 : res.payload);
+                    this.send({
+                        ...res?.header,
+                        to: msg.header.from,
+                        id: msg.header.id,
+                        type: "ServiceResponse"
+                    }, res?.payload);
                 }
             })
                 .catch(err => {
@@ -133,7 +138,7 @@ export class ServiceBroker {
         };
         if (endpointId)
             header.to = endpointId;
-        this.send(Object.assign(Object.assign({}, req.header), header), req.payload);
+        this.send({ ...req.header, ...header }, req.payload);
         return promise;
     }
     advertise(service, handler) {
@@ -173,6 +178,12 @@ export class ServiceBroker {
     }
     unsubscribe(topic) {
         return this.unadvertise("#" + topic);
+    }
+    async status() {
+        const id = ++this.pendingIdGen;
+        this.send({ id, type: "SbStatusRequest" });
+        const res = await new Promise((fulfill, reject) => this.pendingResponses.set(id, { fulfill, reject }));
+        return JSON.parse(res.payload);
     }
     isConnected() {
         return this.ws != null;

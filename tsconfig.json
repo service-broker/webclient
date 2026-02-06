@@ -1,9 +1,9 @@
 {
   "compilerOptions": {
     "module": "esnext",
-    "target": "es2017",
-    "strict": true,
+    "target": "es2020",
     "moduleResolution": "bundler",
+    "strict": true,
     "declaration": true,
     "newLine": "LF",
     "rootDir": "src",

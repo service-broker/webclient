@@ -1,9 +1,12 @@
 {
   "name": "@service-broker/webclient",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "Browser ESM client library for communicating with the service broker",
   "type": "module",
   "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/service-broker/webclient.git"

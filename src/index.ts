@@ -217,6 +217,15 @@ export class ServiceBroker {
     return this.unadvertise("#" + topic)
   }
 
+  async status() {
+    const id = ++this.pendingIdGen
+    this.send({ id, type: "SbStatusRequest" })
+    const res = await new Promise<Message>((fulfill, reject) =>
+      this.pendingResponses.set(id, { fulfill, reject })
+    )
+    return JSON.parse(res.payload!)
+  }
+
   isConnected() {
     return this.ws != null
   }
