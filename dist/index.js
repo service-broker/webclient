@@ -92,6 +92,7 @@ export class ServiceBroker {
         const pendingResponse = this.pendingResponses.get(id);
         if (pendingResponse) {
             this.pendingResponses.delete(id);
+            clearTimeout(pendingResponse.timeoutId);
             if (message.header.error) {
                 pendingResponse.reject(new Error(message.header.error));
             }
@@ -159,13 +160,20 @@ export class ServiceBroker {
         const payloadBlob = payload instanceof Blob ? payload : new Blob([payload]);
         return new Blob([headerBytes, payloadBlob]);
     }
-    request(service, req) {
-        return this.requestTo(null, service, req);
+    request(service, req, timeout) {
+        return this.requestTo(null, service, req, timeout);
     }
-    requestTo(endpointId, service, req) {
+    requestTo(endpointId, service, req, timeout = 30000) {
         const id = ++this.pendingIdGen;
         const promise = new Promise((fulfill, reject) => {
-            this.pendingResponses.set(id, { fulfill, reject });
+            const pendingResponse = { fulfill, reject };
+            if (timeout != 0 && timeout != Infinity) {
+                pendingResponse.timeoutId = setTimeout(() => {
+                    this.pendingResponses.delete(id);
+                    reject(new Error(`Service request timed out after ${timeout} ms`));
+                }, timeout);
+            }
+            this.pendingResponses.set(id, pendingResponse);
         });
         const header = {
             id: id,

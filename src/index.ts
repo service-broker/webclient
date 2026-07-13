@@ -24,6 +24,7 @@ export interface Message {
 interface PendingResponse {
   fulfill(response: Message): void
   reject(err: unknown): void
+  timeoutId?: ReturnType<typeof setTimeout>
 }
 
 function messageFromString(text: string): MessageWithHeader {
@@ -122,6 +123,7 @@ export class ServiceBroker {
     const pendingResponse = this.pendingResponses.get(id)
     if (pendingResponse) {
       this.pendingResponses.delete(id)
+      clearTimeout(pendingResponse.timeoutId)
       if (message.header.error) {
         pendingResponse.reject(new Error(message.header.error as string))
       } else {
@@ -190,14 +192,21 @@ export class ServiceBroker {
   }
 
 
-  request(service: ServiceSelector, req: Message) {
-    return this.requestTo(null, service, req);
+  request(service: ServiceSelector, req: Message, timeout?: number) {
+    return this.requestTo(null, service, req, timeout)
   }
 
-  requestTo(endpointId: string | null, service: ServiceSelector, req: Message) {
+  requestTo(endpointId: string | null, service: ServiceSelector, req: Message, timeout = 30_000) {
     const id = ++this.pendingIdGen
     const promise = new Promise<Message>((fulfill, reject) => {
-      this.pendingResponses.set(id, { fulfill, reject })
+      const pendingResponse: PendingResponse = { fulfill, reject }
+      if (timeout != 0 && timeout != Infinity) {
+        pendingResponse.timeoutId = setTimeout(() => {
+          this.pendingResponses.delete(id)
+          reject(new Error(`Service request timed out after ${timeout} ms`))
+        }, timeout)
+      }
+      this.pendingResponses.set(id, pendingResponse)
     })
     const header: MessageHeader = {
       id: id,

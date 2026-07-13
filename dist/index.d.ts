@@ -34,8 +34,8 @@ export declare class ServiceBroker {
     private messageToData;
     private isBinaryPayload;
     private messageToBinary;
-    request(service: ServiceSelector, req: Message): Promise<Message>;
-    requestTo(endpointId: string | null, service: ServiceSelector, req: Message): Promise<Message>;
+    request(service: ServiceSelector, req: Message, timeout?: number): Promise<Message>;
+    requestTo(endpointId: string | null, service: ServiceSelector, req: Message, timeout?: number): Promise<Message>;
     advertise(service: ServiceSelector, handler: ServiceHandler): void;
     unadvertise(serviceName: string): void;
     setServiceHandler(serviceName: string, handler: ServiceHandler): void;
