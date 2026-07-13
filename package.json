@@ -1,6 +1,6 @@
 {
   "name": "@service-broker/webclient",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Browser ESM client library for communicating with the service broker",
   "type": "module",
   "main": "dist/index.js",
@@ -18,6 +18,6 @@
   },
   "homepage": "https://github.com/service-broker/webclient#readme",
   "devDependencies": {
-    "typescript": "^5.8.3"
+    "typescript": "^7.0.2"
   }
 }

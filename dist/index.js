@@ -12,6 +12,25 @@ function messageFromString(text) {
         };
     }
 }
+function messageFromBinary(buffer) {
+    const bytes = new Uint8Array(buffer);
+    const index = bytes.indexOf(10);
+    const headerBytes = index == -1 ? bytes : bytes.subarray(0, index);
+    const header = JSON.parse(new TextDecoder().decode(headerBytes));
+    if (index == -1)
+        return { header };
+    return { header, payload: buffer.slice(index + 1) };
+}
+function messageFromData(data) {
+    if (typeof data == "string")
+        return messageFromString(data);
+    if (data instanceof ArrayBuffer)
+        return messageFromBinary(data);
+    if (typeof Blob != "undefined" && data instanceof Blob) {
+        return data.arrayBuffer().then(messageFromBinary);
+    }
+    throw new Error("Unsupported message data type");
+}
 export class ServiceBroker {
     constructor(url) {
         this.url = url;
@@ -25,16 +44,18 @@ export class ServiceBroker {
     }
     connect() {
         const conn = new WebSocket(this.url);
+        conn.binaryType = "arraybuffer";
         conn.onopen = () => this.onOpen(conn);
         conn.onerror = () => {
-            console.error("Failed to connect to service broker, retrying in 15");
+            console.info("Failed to connect to service broker, retrying in 15");
             setTimeout(() => this.connect(), 15000);
         };
     }
     onOpen(conn) {
+        console.info("Connected to service broker", conn);
         this.ws = conn;
         this.ws.onerror = console.error;
-        this.ws.onclose = () => this.onClose();
+        this.ws.onclose = event => this.onClose(event);
         this.ws.onmessage = event => this.onMessage(event);
         for (const listener of this.connectListeners)
             listener();
@@ -42,24 +63,29 @@ export class ServiceBroker {
             this.send(header, payload);
         this.pendingSend = [];
     }
-    onClose() {
+    onClose(event) {
         this.ws = null;
-        console.error("Lost connection to service broker, reconnecting");
-        setTimeout(() => this.connect(), 0);
+        console.info("Lost connection to service broker", event.code, event.reason);
+        setTimeout(() => this.connect(), 1000);
     }
-    onMessage(e) {
-        const msg = messageFromString(e.data);
-        console.debug("<<", msg.header, msg.payload);
-        if (msg.header.type == "ServiceResponse")
-            this.onServiceResponse(msg);
-        else if (msg.header.type == "ServiceRequest")
-            this.onServiceRequest(msg);
-        else if (msg.header.type == "SbStatusResponse")
-            this.onServiceResponse(msg);
-        else if (msg.header.error)
-            this.onServiceResponse(msg);
-        else
-            console.error("Unhandled", msg.header);
+    async onMessage(event) {
+        try {
+            const msg = await messageFromData(event.data);
+            console.debug("<<", msg.header, msg.payload);
+            if (msg.header.type == "ServiceResponse")
+                this.onServiceResponse(msg);
+            else if (msg.header.type == "ServiceRequest")
+                await this.onServiceRequest(msg);
+            else if (msg.header.type == "SbStatusResponse")
+                this.onServiceResponse(msg);
+            else if (msg.header.error)
+                this.onServiceResponse(msg);
+            else
+                console.error("Unhandled", msg.header);
+        }
+        catch (err) {
+            console.error("Failed to handle message", event.data, err);
+        }
     }
     onServiceResponse(message) {
         const id = message.header.id;
@@ -77,12 +103,12 @@ export class ServiceBroker {
             console.error("Response received but no pending request", message.header);
         }
     }
-    onServiceRequest(msg) {
+    async onServiceRequest(msg) {
         const service = msg.header.service;
         const provider = this.providers.get(service.name);
         if (provider) {
-            Promise.resolve(provider.handler(msg))
-                .then(res => {
+            try {
+                const res = await provider.handler(msg);
                 if (msg.header.id) {
                     this.send({
                         ...res?.header,
@@ -91,23 +117,23 @@ export class ServiceBroker {
                         type: "ServiceResponse"
                     }, res?.payload);
                 }
-            })
-                .catch(err => {
+            }
+            catch (err) {
                 if (msg.header.id) {
                     this.send({
                         to: msg.header.from,
                         id: msg.header.id,
                         type: "ServiceResponse",
-                        error: err.message || err
+                        error: err instanceof Error ? err.message : err
                     });
                 }
                 else {
-                    console.error(err.message, msg.header);
+                    console.error("Failed to handle notification", msg.header, err);
                 }
-            });
+            }
         }
         else {
-            console.error("No handler for service " + service.name);
+            console.error("No handler for service", service.name);
         }
     }
     send(header, payload) {
@@ -116,12 +142,22 @@ export class ServiceBroker {
             return;
         }
         console.debug(">>", header, payload);
-        if (payload) {
-            this.ws.send(JSON.stringify(header) + "\n" + payload);
-        }
-        else {
-            this.ws.send(JSON.stringify(header));
-        }
+        this.ws.send(this.messageToData(header, payload));
+    }
+    messageToData(header, payload) {
+        if (this.isBinaryPayload(payload))
+            return this.messageToBinary(header, payload);
+        return JSON.stringify(header) + (payload ? "\n" + payload : "");
+    }
+    isBinaryPayload(payload) {
+        return payload instanceof ArrayBuffer ||
+            (typeof Blob != "undefined" && payload instanceof Blob) ||
+            (typeof ArrayBuffer != "undefined" && ArrayBuffer.isView(payload));
+    }
+    messageToBinary(header, payload) {
+        const headerBytes = new TextEncoder().encode(JSON.stringify(header) + "\n");
+        const payloadBlob = payload instanceof Blob ? payload : new Blob([payload]);
+        return new Blob([headerBytes, payloadBlob]);
     }
     request(service, req) {
         return this.requestTo(null, service, req);
@@ -166,9 +202,12 @@ export class ServiceBroker {
     }
     setServiceHandler(serviceName, handler) {
         if (this.providers.has(serviceName)) {
-            throw new Error("Handler already exists");
+            throw new Error(serviceName + " handler already exists");
         }
         this.providers.set(serviceName, { handler });
+    }
+    setHandler(serviceName, handler) {
+        return this.setServiceHandler(serviceName, handler);
     }
     publish(topic, text) {
         return this.send({ type: "ServiceRequest", service: { name: "#" + topic } }, text);
